@@ -1,6 +1,15 @@
 const ApiError = require('../error/ApiError')
 const bcrypt = require('bcrypt')
 const { User, Basket } = require('../models/models')
+const jwt = require('jsonwebtoken')
+
+const generateJwt = (id, email, role) => {
+    return jwt.sign(
+        {id, email, role}, 
+        process.env.SECRET_KEY,
+        {expiresIn: '24h'}
+    )
+}
 
 class UserContrtoller {
     async registration(req, res, next) {
@@ -8,6 +17,16 @@ class UserContrtoller {
         if (!email || !password) {
             return next(ApiError.badRequest('Некорректный Email или Password'))
         }
+        const candidate = await User.findOne({where: {email}})
+        if (candidate) {
+            return next(ApiError.badRequest('Пользователь с таким Email уже существует'))
+        }
+        const hashPassword = await bcrypt.hash(password, 5)
+        const user = await User.create({email, role, password: hashPassword})
+        const basket = await Basket.create({userId: user.id})
+        const token = generateJwt(user.id, user.email, user.role)
+
+        return res.json({token})
     }
     async login(req, res) {
         // res.status(200).json({message: 'Work'})
